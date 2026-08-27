@@ -21,6 +21,7 @@ import {
 
 const MESSAGE_XP_RATE_LIMIT_ATTEMPTS = 12;
 const MESSAGE_XP_RATE_LIMIT_WINDOW_MS = 10000;
+const BUDGET_CHANNEL_ID = '1542220046460387400';
 
 export default {
   name: Events.MessageCreate,
@@ -33,6 +34,11 @@ export default {
       const countingProcessed = await handleCountingGame(message, client);
       if (countingProcessed) {
         return;
+      }
+
+      // Budget tracker — only fires in your budget channel
+      if (message.channel.id === BUDGET_CHANNEL_ID) {
+        await sendToN8nBudget(message);
       }
 
       await handlePrefixCommand(message, client);
@@ -249,5 +255,23 @@ async function handleLeveling(message, client) {
     }
   } catch (error) {
     logger.error('Error handling leveling for message:', error);
+  }
+}
+
+async function sendToN8nBudget(message) {
+  try {
+    await fetch('https://akithecat.app.n8n.cloud/webhook/discord-budget', {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify({
+        content: message.content,
+        author: {
+          id: message.author.id,
+          tag: message.author.tag,
+        },
+      }),
+    });
+  } catch (error) {
+    logger.error('Error sending to n8n budget tracker:', error);
   }
 }
