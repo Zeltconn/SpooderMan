@@ -9,6 +9,8 @@ export const SLASH_ONLY_COMMANDS = new Set([
   'embedbuilder',
   'wipedata',
   'apply',
+  'expense',
+  'income',
 ]);
 
 /** Subcommands blocked for every command when invoked via prefix. */
