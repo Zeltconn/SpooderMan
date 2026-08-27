@@ -269,6 +269,7 @@ async function sendToN8nBudget(message) {
           id: message.author.id,
           tag: message.author.tag,
         },
+        channel_id: message.channel.id,
       }),
     });
   } catch (error) {
