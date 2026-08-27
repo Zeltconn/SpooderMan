@@ -12,6 +12,7 @@ import { getCommandPrefix, getBotMessage, isBotOwner, isCommandCategoryEnabled, 
 import { enforceAbuseProtection, formatCooldownDuration } from '../utils/abuseProtection.js';
 import { createEmbed } from '../utils/embeds.js';
 import { isCommandEnabled } from '../services/commandAccessService.js';
+import { handleN8nBudgetTrigger } from '../services/n8nBudgetTrigger.js';
 import {
   getCountingGameConfig,
   saveCountingGameConfig,
@@ -26,7 +27,15 @@ export default {
   name: Events.MessageCreate,
   async execute(message, client) {
     try {
-      if (message.author.bot || !message.guild) return;
+      if (message.author.bot) return;
+
+      // Budget automation is isolated from the existing command pipeline.
+      // Only !expense / !income are intercepted; everything else continues unchanged.
+      const budgetHandled = await handleN8nBudgetTrigger(message);
+      if (budgetHandled) return;
+
+      // Existing bot features are guild-only. Preserve the original behavior for DMs.
+      if (!message.guild) return;
 
       logger.debug(`Message received from ${message.author.tag}: ${message.content}`);
 
