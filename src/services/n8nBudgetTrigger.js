@@ -6,7 +6,10 @@ const BUDGET_COMMAND_RE = /^!(expense|income)\b/i;
 function getConfig() {
   return {
     webhookUrl: process.env.N8N_BUDGET_WEBHOOK_URL?.trim() || '',
-    allowedUserId: process.env.BUDGET_ALLOWED_USER_ID?.trim() || '',
+    allowedUserIds: (process.env.BUDGET_ALLOWED_USER_IDS || process.env.BUDGET_ALLOWED_USER_ID || '')
+      .split(',')
+      .map((id) => id.trim())
+      .filter(Boolean),
     expenseChannelId: process.env.BUDGET_CHANNEL_ID?.trim() || '',
     allowDMs: String(process.env.BUDGET_ALLOW_DMS ?? 'true').toLowerCase() !== 'false',
   };
@@ -28,9 +31,10 @@ export async function handleN8nBudgetTrigger(message) {
   const config = getConfig();
   const isDM = !message.guildId;
 
-  // Optional owner restriction. Recommended for a personal finance workflow.
-  if (config.allowedUserId && message.author.id !== config.allowedUserId) {
+  // Optional user restriction. Leave BUDGET_ALLOWED_USER_IDS unset/blank to allow everyone.
+  if (config.allowedUserIds.length > 0 && !config.allowedUserIds.includes(message.author.id)) {
     logger.warn(`Blocked budget command from unauthorized user ${message.author.id}`);
+    await message.reply('⚠️ You are not allowed to use the budget workflow.').catch(() => {});
     return true;
   }
 
@@ -39,10 +43,11 @@ export async function handleN8nBudgetTrigger(message) {
     return true;
   }
 
-  // In servers, only the configured budget channel can trigger the workflow.
-  // If BUDGET_CHANNEL_ID is blank, server-based budget commands are disabled.
-  if (!isDM && (!config.expenseChannelId || message.channelId !== config.expenseChannelId)) {
-    return true;
+  // If BUDGET_CHANNEL_ID is configured, restrict server use to that channel.
+  // If it is blank, allow budget commands from any server channel.
+  if (!isDM && config.expenseChannelId && message.channelId !== config.expenseChannelId) {
+    logger.debug(`Budget command ignored outside configured channel: ${message.channelId}`);
+    return false;
   }
 
   if (!config.webhookUrl) {
@@ -76,7 +81,7 @@ export async function handleN8nBudgetTrigger(message) {
   };
 
   try {
-    await axios.post(config.webhookUrl, payload, {
+    const response = await axios.post(config.webhookUrl, payload, {
       timeout: 10000,
       headers: {
         'Content-Type': 'application/json',
@@ -84,8 +89,11 @@ export async function handleN8nBudgetTrigger(message) {
     });
 
     logger.info(
-      `Budget command forwarded to n8n: ${message.author.id} / ${isDM ? 'DM' : message.channelId}`,
+      `Budget command forwarded to n8n: ${message.author.id} / ${isDM ? 'DM' : message.channelId} / HTTP ${response.status}`,
     );
+
+    // Immediate visual acknowledgement that SpooderMan reached n8n.
+    await message.react('✅').catch(() => {});
   } catch (error) {
     const status = error?.response?.status;
     const detail = error?.response?.data ?? error?.message ?? 'Unknown error';

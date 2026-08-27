@@ -140,10 +140,14 @@ export async function createInitialHelpMenu(client) {
 }
 
 export default {
-    slashOnly: true,
     data: new SlashCommandBuilder()
         .setName("help")
         .setDescription("Displays the help menu with all available commands"),
+
+    async prefixExecute(interaction, guildConfig, client) {
+        const { embeds, components } = await createInitialHelpMenu(client);
+        await interaction.reply({ embeds, components });
+    },
 
     async execute(interaction, guildConfig, client) {
         
